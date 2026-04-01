@@ -1,0 +1,98 @@
+# ============================================================================
+# MicroPython + TWAI/CAN Build for ESP32-S3-Zero (Waveshare)
+# ESP32-FH4R2: 4MB Flash, 2MB PSRAM (Quad)
+# ESP-IDF v5.4.1 + MicroPython v1.25.0
+# ============================================================================
+name: Build MicroPython with TWAI Fix
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:   # Manual trigger from Actions tab
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      # ── 1. Checkout this repo (contains fixed mod_can.c) ──
+      - name: Checkout ESP32TWAI repo
+        uses: actions/checkout@v4
+        with:
+          path: cmodules/ESP32TWAI
+
+      # ── 2. Clone MicroPython v1.25.0 ──
+      - name: Clone MicroPython
+        run: |
+          git clone --depth 1 --branch v1.25.0 https://github.com/micropython/micropython.git
+          cd micropython
+          git submodule update --init --depth 1 lib/micropython-lib
+          git submodule update --init --depth 1 lib/berkeley-db-1.xx
+
+      # ── 3. Install ESP-IDF v5.4.1 ──
+      - name: Cache ESP-IDF tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/esp-idf
+            ~/.espressif
+          key: esp-idf-v5.4.1-${{ runner.os }}
+
+      - name: Install ESP-IDF v5.4.1
+        run: |
+          if [ ! -d "$HOME/esp-idf" ]; then
+            git clone --depth 1 --branch v5.4.1 --recursive --shallow-submodules \
+              https://github.com/espressif/esp-idf.git $HOME/esp-idf
+          fi
+          cd $HOME/esp-idf
+          ./install.sh esp32s3
+          echo "IDF_PATH=$HOME/esp-idf" >> $GITHUB_ENV
+
+      # ── 4. Build mpy-cross ──
+      - name: Build mpy-cross
+        run: |
+          source $HOME/esp-idf/export.sh
+          cd micropython
+          make -C mpy-cross -j$(nproc)
+
+      # ── 5. Prepare ESP32 port submodules ──
+      - name: Prepare ESP32 port
+        run: |
+          source $HOME/esp-idf/export.sh
+          cd micropython/ports/esp32
+          rm -f *.lock
+          make submodules
+
+      # ── 6. Build firmware: ESP32-S3 + SPIRAM + TWAI ──
+      - name: Build MicroPython with TWAI
+        run: |
+          source $HOME/esp-idf/export.sh
+          cd micropython/ports/esp32
+
+          # Absolute path to the TWAI C module
+          TWAI_MODULE_PATH=$(realpath ../../../cmodules/ESP32TWAI/src_can_v2/micropython.cmake)
+          echo "TWAI module path: $TWAI_MODULE_PATH"
+          echo "Contents:"
+          ls -la $(dirname $TWAI_MODULE_PATH)/
+
+          idf.py \
+            -D MICROPY_BOARD=ESP32_GENERIC_S3 \
+            -D MICROPY_BOARD_VARIANT=SPIRAM \
+            -D USER_C_MODULES="$TWAI_MODULE_PATH" \
+            -B build_S3_SPIRAM_TWAI \
+            build
+
+      # ── 7. Upload firmware artifacts ──
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: micropython-esp32s3-twai-fix
+          path: |
+            micropython/ports/esp32/build_S3_SPIRAM_TWAI/micropython.bin
+            micropython/ports/esp32/build_S3_SPIRAM_TWAI/bootloader/bootloader.bin
+            micropython/ports/esp32/build_S3_SPIRAM_TWAI/partition_table/partition-table.bin
+            micropython/ports/esp32/build_S3_SPIRAM_TWAI/firmware.bin
+          if-no-files-found: error
