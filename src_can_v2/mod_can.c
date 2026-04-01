@@ -969,4 +969,3 @@ MP_DEFINE_CONST_OBJ_TYPE(
     );
 
 MP_REGISTER_MODULE(MP_QSTR_CAN, machine_can_type);
-
