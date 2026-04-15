@@ -1,4 +1,4 @@
-name: Build MicroPython + TWAI/CAN for ESP32-S3name: Build MicroPython + TWAI/CAN for ESP32-S3
+name: Build MicroPython + TWAI/CAN for ESP32-S3
 
 on:
   workflow_dispatch:
