@@ -41,15 +41,29 @@ jobs:
           cd cmodules
           git clone https://github.com/doctorsoffix/ESP32TWAI.git micropython-esp32-twai
 
-      - name: Patch mod_can.c for MicroPython v1.25
+      - name: Patch mod_can.c for MicroPython v1.25 + soft-reboot fix
         run: |
           cd $HOME/cmodules/micropython-esp32-twai/src_can_v2
+
+          # Fix 1: MP_ERROR_TEXT compatibility for MicroPython v1.25
           sed -i 's/mp_raise_NotImplementedError("\([^"]*\)")/mp_raise_NotImplementedError(MP_ERROR_TEXT("\1"))/g' mod_can.c
           sed -i 's/mp_raise_TypeError("\([^"]*\)")/mp_raise_TypeError(MP_ERROR_TEXT("\1"))/g' mod_can.c
           sed -i 's/mp_raise_ValueError("\([^"]*\)")/mp_raise_ValueError(MP_ERROR_TEXT("\1"))/g' mod_can.c
           sed -i 's/mp_raise_msg(&\([^,]*\), "\([^"]*\)")/mp_raise_msg(\&\1, MP_ERROR_TEXT("\2"))/g' mod_can.c
           sed -i 's/mp_raise_msg_varg(&\([^,]*\), "\([^"]*\)"/mp_raise_msg_varg(\&\1, MP_ERROR_TEXT("\2")/g' mod_can.c
-          echo "Patch complete"
+
+          # Fix 2: Soft-reboot TWAI cleanup — add twai_stop + twai_driver_uninstall 
+          # before twai_driver_install in constructor. This fixes ESP_ERR_INVALID_STATE
+          # when CAN() is called after a MicroPython soft-reboot.
+          sed -i '/esp_err_t result = twai_driver_install/i \
+    // Cleanup stale TWAI driver (fixes soft-reboot ESP_ERR_INVALID_STATE)\
+    twai_stop();\
+    twai_driver_uninstall();' mod_can.c
+
+          echo "=== Patches applied ==="
+          echo "--- Verifying soft-reboot patch ---"
+          grep -n -B1 -A3 "Cleanup stale" mod_can.c
+          echo "--- Done ---"
 
       - name: Configure board for ESP32-S3-Zero (4MB Flash, USB console)
         run: |
