@@ -56,7 +56,6 @@ jobs:
           # before twai_driver_install in constructor. This fixes ESP_ERR_INVALID_STATE
           # when CAN() is called after a MicroPython soft-reboot.
           sed -i '/esp_err_t result = twai_driver_install/i \
-    // Cleanup stale TWAI driver (fixes soft-reboot ESP_ERR_INVALID_STATE)\
     twai_stop();\
     twai_driver_uninstall();' mod_can.c
 
