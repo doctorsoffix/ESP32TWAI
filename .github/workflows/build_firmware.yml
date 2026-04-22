@@ -1,4 +1,4 @@
-name: Build MicroPython + TWAI/CAN for ESP32-S3
+name: Build MicroPython + TWAI + TFTCore for ESP32-S3
 
 on:
   workflow_dispatch:
@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -31,46 +34,46 @@ jobs:
           cd micropython
           git checkout v1.25.0
           git submodule update --init --recursive
-          echo "MicroPython version:"
-          git describe --tags
 
-      - name: Clone TWAI/CAN module (with timing fix)
+      - name: Clone TWAI/CAN module
         run: |
           cd $HOME
           mkdir -p cmodules
           cd cmodules
           git clone https://github.com/doctorsoffix/ESP32TWAI.git micropython-esp32-twai
 
+      - name: Copy TFTCore module from repo
+        run: |
+          cp -r $GITHUB_WORKSPACE/tftcore $HOME/cmodules/tftcore
+
+      - name: Create combined C modules CMake
+        run: |
+          cat > $HOME/cmodules/micropython.cmake << 'CMAKE'
+          # Combined USER_C_MODULES: TWAI + TFTCore
+          include(${CMAKE_CURRENT_LIST_DIR}/micropython-esp32-twai/src_can_v2/micropython.cmake)
+          include(${CMAKE_CURRENT_LIST_DIR}/tftcore/micropython.cmake)
+          CMAKE
+
       - name: Patch mod_can.c for MicroPython v1.25 + soft-reboot fix
         run: |
           cd $HOME/cmodules/micropython-esp32-twai/src_can_v2
 
-          # Fix 1: MP_ERROR_TEXT compatibility for MicroPython v1.25
           sed -i 's/mp_raise_NotImplementedError("\([^"]*\)")/mp_raise_NotImplementedError(MP_ERROR_TEXT("\1"))/g' mod_can.c
           sed -i 's/mp_raise_TypeError("\([^"]*\)")/mp_raise_TypeError(MP_ERROR_TEXT("\1"))/g' mod_can.c
           sed -i 's/mp_raise_ValueError("\([^"]*\)")/mp_raise_ValueError(MP_ERROR_TEXT("\1"))/g' mod_can.c
           sed -i 's/mp_raise_msg(&\([^,]*\), "\([^"]*\)")/mp_raise_msg(\&\1, MP_ERROR_TEXT("\2"))/g' mod_can.c
           sed -i 's/mp_raise_msg_varg(&\([^,]*\), "\([^"]*\)"/mp_raise_msg_varg(\&\1, MP_ERROR_TEXT("\2")/g' mod_can.c
 
-          # Fix 2: Soft-reboot TWAI cleanup
-          # Only patch the CONSTRUCTOR (esp32_can_init_helper), not clearfilter/set_filters.
-          # Insert cleanup BEFORE the first twai_driver_install_v2 that follows "Loopback flag".
-          # The v1 functions (twai_stop/twai_driver_uninstall without _v2) operate on the
-          # global legacy TWAI handle — perfect for cleaning up stale state after soft-reboot.
           sed -i '/CAN: Loopback flag/,/check_esp_err(twai_driver_install_v2/{
             /check_esp_err(twai_driver_install_v2/i \    \/\/ Cleanup stale TWAI driver (fixes soft-reboot ESP_ERR_INVALID_STATE)\n    twai_stop();\n    twai_driver_uninstall();
           }' mod_can.c
 
-          echo "=== Patches applied ==="
-          echo "--- Verifying soft-reboot patch ---"
-          grep -n -B1 -A3 "Cleanup stale" mod_can.c
-          echo "--- Done ---"
+          echo "=== TWAI patches applied ==="
 
-      - name: Configure board for ESP32-S3-Zero (4MB Flash, USB console)
+      - name: Configure board for ESP32-S3-Zero (4MB Flash, 2MB PSRAM)
         run: |
           cd $HOME/micropython/ports/esp32/boards/ESP32_GENERIC_S3
 
-          # Create custom partition table for 4MB flash
           cat > partitions_4mb.csv << 'PARTCSV'
           # Name,   Type, SubType, Offset,  Size,    Flags
           nvs,      data, nvs,     0x9000,  0x6000,
@@ -79,19 +82,21 @@ jobs:
           vfs,      data, fat,     0x200000,0x200000,
           PARTCSV
 
-          # Override sdkconfig for 4MB flash + USB console
           cat > sdkconfig.board << 'SDKCFG'
           CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
           CONFIG_PARTITION_TABLE_CUSTOM=y
           CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="boards/ESP32_GENERIC_S3/partitions_4mb.csv"
           CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
           CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+          CONFIG_SPIRAM=y
+          CONFIG_SPIRAM_MODE_OCT=y
+          CONFIG_SPIRAM_SPEED_80M=y
+          CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+          CONFIG_ESP32S3_DATA_CACHE_64KB=y
+          CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
           SDKCFG
 
-          echo "--- sdkconfig.board ---"
-          cat sdkconfig.board
-          echo "--- partitions_4mb.csv ---"
-          cat partitions_4mb.csv
+          echo "--- Board config ready ---"
 
       - name: Build mpy-cross
         run: |
@@ -105,7 +110,7 @@ jobs:
           rm -f *.lock
           make submodules
 
-      - name: Build MicroPython with TWAI/CAN
+      - name: Build MicroPython with TWAI + TFTCore
         run: |
           source $HOME/esp-idf/export.sh
           cd $HOME/micropython/ports/esp32
@@ -114,22 +119,19 @@ jobs:
 
           idf.py \
             -D MICROPY_BOARD=ESP32_GENERIC_S3 \
-            -D USER_C_MODULES=../../../../cmodules/micropython-esp32-twai/src_can_v2/micropython.cmake \
+            -D USER_C_MODULES=../../../../cmodules/micropython.cmake \
             -B build_ESP32_GENERIC_S3 \
             build \
           || {
-            echo "BUILD FAILED - Dumping logs"
+            echo "BUILD FAILED"
             for f in build_ESP32_GENERIC_S3/log/idf_py_stderr_output_*; do
               [ -f "$f" ] && cat "$f"
-            done
-            for f in build_ESP32_GENERIC_S3/log/idf_py_stdout_output_*; do
-              [ -f "$f" ] && tail -50 "$f"
             done
             exit 1
           }
 
           echo "============================================"
-          echo " BUILD COMPLETE"
+          echo " BUILD COMPLETE — TWAI + TFTCore"
           echo "============================================"
 
       - name: Generate combined firmware.bin
@@ -152,7 +154,7 @@ jobs:
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
-          name: micropython-esp32s3-twai-firmware
+          name: micropython-esp32s3-twai-tftcore-firmware
           path: |
             ~/micropython/ports/esp32/build_ESP32_GENERIC_S3/firmware.bin
             ~/micropython/ports/esp32/build_ESP32_GENERIC_S3/micropython.bin
