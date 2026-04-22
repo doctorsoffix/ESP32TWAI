@@ -136,7 +136,7 @@ static void tft_hw_init(void) {
         .queue_size = 1,
         .pre_cb = NULL,
     };
-    spi_device_add_device(SPI2_HOST, &dev, &spi_dev);
+    spi_bus_add_device(SPI2_HOST, &dev, &spi_dev);
 
     // Reset
     gpio_set_level(PIN_RST, 0);
@@ -393,7 +393,7 @@ static void fb_text(int x, int y, const char *str, uint16_t fg, uint16_t bg) {
 // ═══════ MicroPython Bindings ═══════
 
 // tftcore.init()
-STATIC mp_obj_t tftcore_init(void) {
+static mp_obj_t tftcore_init(void) {
     if (initialized) return mp_const_none;
 
     // Allocate framebuffer in PSRAM
@@ -408,18 +408,18 @@ STATIC mp_obj_t tftcore_init(void) {
     printf("tftcore: init OK, framebuf=%p (%d bytes in PSRAM)\n", framebuf, TFT_BUFSIZE);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(tftcore_init_obj, tftcore_init);
+static MP_DEFINE_CONST_FUN_OBJ_0(tftcore_init_obj, tftcore_init);
 
 // tftcore.fill(color) — fill entire screen
-STATIC mp_obj_t tftcore_fill(mp_obj_t color_obj) {
+static mp_obj_t tftcore_fill(mp_obj_t color_obj) {
     uint16_t c = mp_obj_get_int(color_obj);
     fb_fill_rect(0, 0, TFT_W, TFT_H, c);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(tftcore_fill_obj, tftcore_fill);
+static MP_DEFINE_CONST_FUN_OBJ_1(tftcore_fill_obj, tftcore_fill);
 
 // tftcore.rect(x, y, w, h, color)
-STATIC mp_obj_t tftcore_rect(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t tftcore_rect(size_t n_args, const mp_obj_t *args) {
     int x = mp_obj_get_int(args[0]);
     int y = mp_obj_get_int(args[1]);
     int w = mp_obj_get_int(args[2]);
@@ -428,19 +428,19 @@ STATIC mp_obj_t tftcore_rect(size_t n_args, const mp_obj_t *args) {
     fb_fill_rect(x, y, w, h, c);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_rect_obj, 5, 5, tftcore_rect);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_rect_obj, 5, 5, tftcore_rect);
 
 // tftcore.line(x0, y0, x1, y1, color)
-STATIC mp_obj_t tftcore_line(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t tftcore_line(size_t n_args, const mp_obj_t *args) {
     fb_line(mp_obj_get_int(args[0]), mp_obj_get_int(args[1]),
             mp_obj_get_int(args[2]), mp_obj_get_int(args[3]),
             mp_obj_get_int(args[4]));
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_line_obj, 5, 5, tftcore_line);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_line_obj, 5, 5, tftcore_line);
 
 // tftcore.circle(cx, cy, r, color, fill=False)
-STATIC mp_obj_t tftcore_circle(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t tftcore_circle(size_t n_args, const mp_obj_t *args) {
     int cx = mp_obj_get_int(args[0]);
     int cy = mp_obj_get_int(args[1]);
     int r = mp_obj_get_int(args[2]);
@@ -449,10 +449,10 @@ STATIC mp_obj_t tftcore_circle(size_t n_args, const mp_obj_t *args) {
     fb_circle(cx, cy, r, c, fill);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_circle_obj, 4, 5, tftcore_circle);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_circle_obj, 4, 5, tftcore_circle);
 
 // tftcore.rrect(x, y, w, h, r, color, fill=False)
-STATIC mp_obj_t tftcore_rrect(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t tftcore_rrect(size_t n_args, const mp_obj_t *args) {
     int x=mp_obj_get_int(args[0]), y=mp_obj_get_int(args[1]);
     int w=mp_obj_get_int(args[2]), h=mp_obj_get_int(args[3]);
     int r=mp_obj_get_int(args[4]);
@@ -461,26 +461,26 @@ STATIC mp_obj_t tftcore_rrect(size_t n_args, const mp_obj_t *args) {
     fb_rounded_rect(x, y, w, h, r, c, fill);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_rrect_obj, 6, 7, tftcore_rrect);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_rrect_obj, 6, 7, tftcore_rrect);
 
 // tftcore.gradient(x, y, w, h, c1, c2)
-STATIC mp_obj_t tftcore_gradient(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t tftcore_gradient(size_t n_args, const mp_obj_t *args) {
     fb_gradient_v(mp_obj_get_int(args[0]), mp_obj_get_int(args[1]),
                   mp_obj_get_int(args[2]), mp_obj_get_int(args[3]),
                   mp_obj_get_int(args[4]), mp_obj_get_int(args[5]));
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_gradient_obj, 6, 6, tftcore_gradient);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_gradient_obj, 6, 6, tftcore_gradient);
 
 // tftcore.pixel(x, y, color)
-STATIC mp_obj_t tftcore_pixel(mp_obj_t x, mp_obj_t y, mp_obj_t c) {
+static mp_obj_t tftcore_pixel(mp_obj_t x, mp_obj_t y, mp_obj_t c) {
     fb_pixel(mp_obj_get_int(x), mp_obj_get_int(y), mp_obj_get_int(c));
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(tftcore_pixel_obj, tftcore_pixel);
+static MP_DEFINE_CONST_FUN_OBJ_3(tftcore_pixel_obj, tftcore_pixel);
 
 // tftcore.text(x, y, string, fg, bg) — built-in 5x7 font
-STATIC mp_obj_t tftcore_text(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t tftcore_text(size_t n_args, const mp_obj_t *args) {
     int x = mp_obj_get_int(args[0]);
     int y = mp_obj_get_int(args[1]);
     const char *str = mp_obj_str_get_str(args[2]);
@@ -489,10 +489,10 @@ STATIC mp_obj_t tftcore_text(size_t n_args, const mp_obj_t *args) {
     fb_text(x, y, str, fg, bg);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_text_obj, 5, 5, tftcore_text);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_text_obj, 5, 5, tftcore_text);
 
 // tftcore.blit(x, y, w, h, buf) — blit raw 16-bit pixel buffer (for custom fonts)
-STATIC mp_obj_t tftcore_blit(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t tftcore_blit(size_t n_args, const mp_obj_t *args) {
     int x = mp_obj_get_int(args[0]);
     int y = mp_obj_get_int(args[1]);
     int w = mp_obj_get_int(args[2]);
@@ -514,27 +514,27 @@ STATIC mp_obj_t tftcore_blit(size_t n_args, const mp_obj_t *args) {
     dirty_mark(x, y, x+w-1, y+h-1);
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_blit_obj, 5, 5, tftcore_blit);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(tftcore_blit_obj, 5, 5, tftcore_blit);
 
 // tftcore.flush() — send dirty region to display
-STATIC mp_obj_t tftcore_flush(void) {
+static mp_obj_t tftcore_flush(void) {
     if (!dirty) return mp_const_none;
     flush_rect(dirty_x0, dirty_y0, dirty_x1, dirty_y1);
     dirty_reset();
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(tftcore_flush_obj, tftcore_flush);
+static MP_DEFINE_CONST_FUN_OBJ_0(tftcore_flush_obj, tftcore_flush);
 
 // tftcore.flush_full() — force full screen refresh
-STATIC mp_obj_t tftcore_flush_full(void) {
+static mp_obj_t tftcore_flush_full(void) {
     flush_full();
     dirty_reset();
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(tftcore_flush_full_obj, tftcore_flush_full);
+static MP_DEFINE_CONST_FUN_OBJ_0(tftcore_flush_full_obj, tftcore_flush_full);
 
 // ═══════ Module Definition ═══════
-STATIC const mp_rom_map_elem_t tftcore_globals_table[] = {
+static const mp_rom_map_elem_t tftcore_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_tftcore) },
     { MP_ROM_QSTR(MP_QSTR_init),     MP_ROM_PTR(&tftcore_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_fill),     MP_ROM_PTR(&tftcore_fill_obj) },
@@ -549,7 +549,7 @@ STATIC const mp_rom_map_elem_t tftcore_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_flush),    MP_ROM_PTR(&tftcore_flush_obj) },
     { MP_ROM_QSTR(MP_QSTR_flush_full), MP_ROM_PTR(&tftcore_flush_full_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(tftcore_globals, tftcore_globals_table);
+static MP_DEFINE_CONST_DICT(tftcore_globals, tftcore_globals_table);
 
 const mp_obj_module_t tftcore_module = {
     .base = { &mp_type_module },
