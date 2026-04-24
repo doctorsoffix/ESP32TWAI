@@ -123,9 +123,14 @@ jobs:
             -B build_ESP32_GENERIC_S3 \
             build \
           || {
-            echo "BUILD FAILED"
+            echo "===== BUILD FAILED ====="
+            echo "--- STDERR LOGS ---"
             for f in build_ESP32_GENERIC_S3/log/idf_py_stderr_output_*; do
-              [ -f "$f" ] && cat "$f"
+              echo "=== $f ==="; [ -f "$f" ] && cat "$f"
+            done
+            echo "--- STDOUT LOGS (tail 100) ---"
+            for f in build_ESP32_GENERIC_S3/log/idf_py_stdout_output_*; do
+              echo "=== $f ==="; [ -f "$f" ] && tail -100 "$f"
             done
             exit 1
           }
