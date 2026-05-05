@@ -70,6 +70,14 @@ jobs:
 
           echo "=== TWAI patches applied ==="
 
+      - name: Patch tftcore.c — Display 180° Rotation (MADCTL 0x48 → 0xC8)
+        run: |
+          # 0x48 = MX + BGR  (nur X gespiegelt)
+          # 0xC8 = MY + MX + BGR  (180° Rotation, Farben korrekt)
+          sed -i 's/uint8_t mx=0x48;/uint8_t mx=0xC8;/' $HOME/cmodules/tftcore/tftcore.c
+          echo "=== MADCTL patch applied ==="
+          grep "uint8_t mx=" $HOME/cmodules/tftcore/tftcore.c
+
       - name: Configure board for ESP32-S3-Zero (4MB Flash, 2MB PSRAM)
         run: |
           cd $HOME/micropython/ports/esp32/boards/ESP32_GENERIC_S3
@@ -89,9 +97,11 @@ jobs:
           CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
           CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
           CONFIG_SPIRAM=y
-          CONFIG_SPIRAM_MODE_QUAD=y
+          CONFIG_SPIRAM_MODE_OCT=y
           CONFIG_SPIRAM_SPEED_80M=y
           CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+          CONFIG_ESP32S3_DATA_CACHE_64KB=y
+          CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
           CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
           CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
           SDKCFG
@@ -123,14 +133,9 @@ jobs:
             -B build_ESP32_GENERIC_S3 \
             build \
           || {
-            echo "===== BUILD FAILED ====="
-            echo "--- STDERR LOGS ---"
+            echo "BUILD FAILED"
             for f in build_ESP32_GENERIC_S3/log/idf_py_stderr_output_*; do
-              echo "=== $f ==="; [ -f "$f" ] && cat "$f"
-            done
-            echo "--- STDOUT LOGS (tail 100) ---"
-            for f in build_ESP32_GENERIC_S3/log/idf_py_stdout_output_*; do
-              echo "=== $f ==="; [ -f "$f" ] && tail -100 "$f"
+              [ -f "$f" ] && cat "$f"
             done
             exit 1
           }
@@ -149,7 +154,7 @@ jobs:
             --flash_mode dio \
             --flash_size 4MB \
             --flash_freq 80m \
-            0x0 build_ESP32_GENERIC_S3/bootloader/bootloader.bin \
+            0x0    build_ESP32_GENERIC_S3/bootloader/bootloader.bin \
             0x8000 build_ESP32_GENERIC_S3/partition_table/partition-table.bin \
             0x10000 build_ESP32_GENERIC_S3/micropython.bin
 
