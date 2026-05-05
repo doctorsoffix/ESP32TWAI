@@ -70,13 +70,25 @@ jobs:
 
           echo "=== TWAI patches applied ==="
 
-      - name: Patch tftcore.c — Display 180° Rotation (MADCTL 0x48 → 0xC8)
+      - name: Patch tftcore.c — Display 180° Rotation + Compiler-Fehler beheben
         run: |
-          # 0x48 = MX + BGR  (nur X gespiegelt)
-          # 0xC8 = MY + MX + BGR  (180° Rotation, Farben korrekt)
-          sed -i 's/uint8_t mx=0x48;/uint8_t mx=0xC8;/' $HOME/cmodules/tftcore/tftcore.c
-          echo "=== MADCTL patch applied ==="
-          grep "uint8_t mx=" $HOME/cmodules/tftcore/tftcore.c
+          cd $HOME/cmodules/tftcore
+
+          # 1. MADCTL 180° Rotation: 0x48 → 0xC8 (MY+MX+BGR)
+          sed -i 's/uint8_t mx=0x48;/uint8_t mx=0xC8;/' tftcore.c
+
+          # 2. -Werror=misleading-indentation: mehrere if-Statements auf einer Zeile trennen
+          # Zeile 96: fb_fill_rect
+          sed -i 's/if(x+w>TFT_W)w=TFT_W-x;if(y+h>TFT_H)h=TFT_H-y;/if(x+w>TFT_W)w=TFT_W-x;\n    if(y+h>TFT_H)h=TFT_H-y;/' tftcore.c
+
+          # Zeile 139: fb_rounded_rect
+          sed -i 's/if(r>w\/2)r=w\/2;if(r>h\/2)r=h\/2;/if(r>w\/2)r=w\/2;\n    if(r>h\/2)r=h\/2;/' tftcore.c
+
+          # Zeile 459: flush_rect (4 ifs auf einer Zeile)
+          sed -i 's/if(x0<0)x0=0;if(y0<0)y0=0;if(x1>=TFT_W)x1=TFT_W-1;if(y1>=TFT_H)y1=TFT_H-1;/if(x0<0)x0=0;\n    if(y0<0)y0=0;\n    if(x1>=TFT_W)x1=TFT_W-1;\n    if(y1>=TFT_H)y1=TFT_H-1;/' tftcore.c
+
+          echo "=== tftcore.c patches applied ==="
+          grep "uint8_t mx=" tftcore.c
 
       - name: Configure board for ESP32-S3-Zero (4MB Flash, 2MB PSRAM)
         run: |
