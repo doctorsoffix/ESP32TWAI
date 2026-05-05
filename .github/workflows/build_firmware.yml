@@ -75,7 +75,7 @@ jobs:
           cd $HOME/cmodules/tftcore
 
           # 1. MADCTL 180° Rotation: 0x48 → 0xC8 (MY+MX+BGR)
-          sed -i 's/uint8_t mx=0x48;/uint8_t mx=0xC8;/' tftcore.c
+          sed -i 's/uint8_t mx=0x48;/uint8_t mx=0x88;/' tftcore.c
 
           # 2. -Werror=misleading-indentation: mehrere if-Statements auf einer Zeile trennen
           # Zeile 96: fb_fill_rect
